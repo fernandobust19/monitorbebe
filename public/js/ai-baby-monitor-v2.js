@@ -1065,21 +1065,22 @@ class BabyAIMonitorV2 {
                 }
             });
         }
-    }
-        if (this.isNearEdge(babyState.location)) {
+        
+        // Verificar riesgo de caída
+        if (this.lastBabyState && this.isNearEdge(this.lastBabyState.location)) {
             this.triggerAlert('edge_risk', {
                 severity: 'high',
                 message: '⚠️ ¡PELIGRO! Bebé cerca del borde - riesgo de caída',
                 confidence: 0.8,
                 details: { 
-                    location: babyState.position,
+                    location: this.lastBabyState.position,
                     risk: 'fall_danger',
                     urgency: 'high'
                 }
             });
         }
         
-        this.lastBabyState = babyState;
+        this.lastBabyState = this.currentBabyState;
         this.lastActivityTime = currentTime;
     }
     

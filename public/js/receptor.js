@@ -655,6 +655,9 @@ function handleAIAlertFromEmisor(alertData) {
         aiAlertCount++;
         lastAlertTime = new Date(timestamp).toLocaleTimeString();
         
+        // LIMPIAR ALERTAS ANTERIORES - solo mostrar la más reciente
+        clearPreviousAlerts();
+        
         // Reproducir sonido de alarma según severidad con mayor duración
         if (window.alarmSounds) {
             const duration = severity === 'CRITICAL' ? 6000 : 
@@ -681,7 +684,7 @@ function handleAIAlertFromEmisor(alertData) {
         };
         
         const locationInfo = emisorInfo?.cameraLocation ? ` [${emisorInfo.cameraLocation}]` : '';
-        const detailsStr = details ? ` - Detalles: ${JSON.stringify(details).replace(/["{},]/g, ' ')}` : '';
+        const detailsStr = details ? ` - ${getDetailsString(details)}` : '';
         addLogMessage(`${severityEmoji[severity]} ${message}${locationInfo}${detailsStr}`);
         
         // Mostrar notificación emergente para alertas importantes
@@ -693,7 +696,7 @@ function handleAIAlertFromEmisor(alertData) {
         console.log('👶 Alerta del bebé recibida:', alertData);
         
         // Hacer parpadear la pestaña del navegador para alertas críticas
-        if (severity === 'critical') {
+        if (severity === 'CRITICAL') {
             blinkTab('🚨 ALERTA CRÍTICA - Monitor Bebé');
             
             // Vibrar dispositivo si está disponible
@@ -706,6 +709,38 @@ function handleAIAlertFromEmisor(alertData) {
         console.error('Error procesando alerta de IA:', error);
         addLogMessage('❌ Error procesando alerta de IA del emisor');
     }
+}
+
+/**
+ * Limpiar alertas anteriores para mostrar solo la más reciente
+ */
+function clearPreviousAlerts() {
+    const alertsContainer = document.getElementById('alertsContainer');
+    if (alertsContainer) {
+        // Remover todas las alertas existentes excepto el mensaje "sin alertas"
+        const existingAlerts = alertsContainer.querySelectorAll('.ai-alert, .enhanced-alert');
+        existingAlerts.forEach(alert => {
+            alert.remove();
+        });
+        
+        // Asegurar que el mensaje "sin alertas" esté oculto si hay alertas
+        const noAlertsMsg = alertsContainer.querySelector('.no-alerts');
+        if (noAlertsMsg) {
+            noAlertsMsg.style.display = 'none';
+        }
+    }
+}
+
+/**
+ * Obtener string de detalles formateado
+ */
+function getDetailsString(details) {
+    const detailParts = [];
+    if (details.location) detailParts.push(`Ubicación: ${details.location}`);
+    if (details.risk) detailParts.push(`Riesgo: ${details.risk}`);
+    if (details.lastFaceDetection) detailParts.push(`Sin cara: ${details.lastFaceDetection}s`);
+    if (details.hoursAsleep) detailParts.push(`Durmiendo: ${details.hoursAsleep}h`);
+    return detailParts.join(', ');
 }
 
 /**

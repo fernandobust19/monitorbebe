@@ -17,134 +17,24 @@
     <div class="container">
         <div class="header">
             <h1>📺 Receptor de Video</h1>
-            <p>Visualización en vivo con Monitoreo IA</p>
+            <p>Monitoreo Automático con IA</p>
             <button id="backBtn" class="btn-secondary">← Volver al inicio</button>
         </div>
 
-        <!-- Panel de Configuración de IA -->
-        <div id="aiSettingsModal" class="ai-settings-modal" style="display: none;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>🤖 Configuración de Cuidado IA</h3>
-                    <button onclick="closeAISettings()" class="modal-close">×</button>
-                </div>
-                <div class="modal-body">
-                    <div class="care-config-section">
-                        <h4>👥 Cuidadores Autorizados</h4>
-                        <p>Define quiénes pueden cuidar al bebé sin generar alertas:</p>
-                        <div class="caregiver-list">
-                            <div class="caregiver-item">
-                                <input type="text" id="caregiver1" placeholder="Nombre del cuidador 1 (ej: Mamá)" class="caregiver-input">
-                                <select class="caregiver-type">
-                                    <option value="parent">Padre/Madre</option>
-                                    <option value="family">Familiar</option>
-                                    <option value="nurse">Niñera</option>
-                                    <option value="visitor">Visitante</option>
-                                </select>
-                            </div>
-                            <div class="caregiver-item">
-                                <input type="text" id="caregiver2" placeholder="Nombre del cuidador 2 (ej: Papá)" class="caregiver-input">
-                                <select class="caregiver-type">
-                                    <option value="parent">Padre/Madre</option>
-                                    <option value="family">Familiar</option>
-                                    <option value="nurse">Niñera</option>
-                                    <option value="visitor">Visitante</option>
-                                </select>
-                            </div>
-                            <button onclick="addCaregiver()" class="btn-add-caregiver">➕ Agregar Cuidador</button>
-                        </div>
-                    </div>
-                    
-                    <div class="care-config-section">
-                        <h4>🚪 Rutinas de Cuidado</h4>
-                        <div class="routine-config">
-                            <label>
-                                <input type="checkbox" id="feedingTime"> 🍼 Horarios de alimentación
-                                <input type="time" id="feedingSchedule" class="time-input">
-                            </label>
-                            <label>
-                                <input type="checkbox" id="sleepTime"> 😴 Hora de dormir
-                                <input type="time" id="sleepSchedule" class="time-input">
-                            </label>
-                            <label>
-                                <input type="checkbox" id="playTime"> 🧨 Tiempo de juego
-                                <input type="time" id="playSchedule" class="time-input">
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="care-config-section">
-                        <h4>⚠️ Sensibilidad de Alertas</h4>
-                        <div class="sensitivity-config">
-                            <label>Movimiento del bebé:
-                                <select id="movementSensitivity">
-                                    <option value="low">Baja - Solo movimientos extremos</option>
-                                    <option value="medium" selected>Media - Movimientos significativos</option>
-                                    <option value="high">Alta - Cualquier movimiento</option>
-                                </select>
-                            </label>
-                            <label>Personas desconocidas:
-                                <select id="strangerSensitivity">
-                                    <option value="low">Baja - Solo si se acercan mucho</option>
-                                    <option value="medium" selected>Media - Personas cerca del bebé</option>
-                                    <option value="high">Alta - Cualquier persona en la habitación</option>
-                                </select>
-                            </label>
-                            <label>Objetos peligrosos:
-                                <select id="objectSensitivity">
-                                    <option value="low">Baja - Solo objetos muy peligrosos</option>
-                                    <option value="medium" selected>Media - Objetos potencialmente peligrosos</option>
-                                    <option value="high">Alta - Cualquier objeto no identificado</option>
-                                </select>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="care-config-section">
-                        <h4>🔔 Tipos de Cuidado Especial</h4>
-                        <div class="special-care">
-                            <label><input type="checkbox" id="prematureBaby"> 👼 Bebé prematuro (mayor sensibilidad)</label>
-                            <label><input type="checkbox" id="sickBaby"> 🤒 Bebé enfermo (monitoreo intensivo)</label>
-                            <label><input type="checkbox" id="activeBaby"> 🏃 Bebé muy activo (movimiento normal)</label>
-                            <label><input type="checkbox" id="sleepyBaby"> 😴 Bebé que duerme mucho (menos alertas de quietud)</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button onclick="saveAISettings()" class="btn-save">💾 Guardar Configuración</button>
-                    <button onclick="resetAISettings()" class="btn-reset">🔄 Restaurar Predeterminado</button>
-                    <button onclick="closeAISettings()" class="btn-cancel">Cancelar</button>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Panel de Estado de IA para Receptor -->
-        <div id="aiStatusReceptor" class="ai-status-panel" style="display: none;">
-            <h4>🤖 Monitor IA - Receptor</h4>
-            <p>Recibiendo alertas del emisor...</p>
-            <div style="margin: 10px 0;">
-                <button id="testAlarmBtn" class="btn-secondary" style="margin-right: 10px;">🔊 Probar Alarma</button>
-                <button id="toggleSoundBtn" class="btn-secondary">🔇 Silenciar Sonidos</button>
-            </div>
-            <div class="ai-stats">
-                <div class="ai-stat">
-                    <strong id="alertCountReceptor">0</strong>
-                    <span>Alertas Recibidas</span>
-                </div>
-                <div class="ai-stat">
-                    <strong id="lastAlertTimeReceptor">Nunca</strong>
-                    <span>Última Alerta</span>
-                </div>
+        <!-- Panel de Alertas Automáticas -->
+        <div id="aiAlertsPanel" class="ai-alerts-panel">
+            <h4>🚨 Alertas del Monitor IA</h4>
+            <div id="alertsContainer" class="alerts-container">
+                <div class="no-alerts">No hay alertas activas</div>
             </div>
         </div>
 
         <div class="video-container">
             <div class="video-section full-width">
                 <div class="video-header">
-                    <h3>Transmisión Recibida</h3>
-                    <div class="ai-controls-inline">
-                        <button id="aiMonitorToggleReceptor" class="btn-ai-control" onclick="toggleAIFromReceptor()">🤖 Activar IA</button>
-                        <button id="aiSettingsBtn" class="btn-ai-settings" onclick="openAISettings()">⚙️ Configurar</button>
+                    <h3>Transmisión en Vivo con IA Automática</h3>
+                    <div class="ai-status-display">
+                        <span id="aiAutoStatus" class="ai-auto-status">🤖 IA Automática: Activa</span>
                     </div>
                 </div>
                 <video id="remoteVideo" 

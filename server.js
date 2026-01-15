@@ -273,6 +273,39 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Manejo de alertas de IA - reenvía alertas del emisor a todos los receptores
+  socket.on('ai-alert', (alertData) => {
+    const user = users.get(socket.userId);
+    if (!user || !user.roomId) return;
+    
+    const room = rooms.get(user.roomId);
+    if (!room) return;
+
+    // Solo el emisor puede enviar alertas de IA
+    if (user.role === 'emisor' && room.emisor === socket.userId) {
+      console.log(`Alerta IA de ${user.username} en sala ${user.roomId}: ${alertData.type} - ${alertData.severity}`);
+      
+      // Reenviar la alerta a todos los receptores en la sala
+      room.receptores.forEach(receptorId => {
+        const receptorSocket = getUserSocket(receptorId);
+        if (receptorSocket) {
+          receptorSocket.emit('ai-alert', {
+            ...alertData,
+            emisorInfo: {
+              ...alertData.emisorInfo,
+              username: user.username,
+              userId: socket.userId
+            },
+            serverTimestamp: new Date().toISOString()
+          });
+        }
+      });
+      
+      // Log para seguimiento
+      console.log(`Alerta IA reenviada a ${room.receptores.length} receptor(es)`);
+    }
+  });
+
   // Eventos de estado de conexión
   socket.on('connection-state-change', (data) => {
     const user = users.get(socket.userId);

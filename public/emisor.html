@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emisor - Monitor Bebé</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📷 Emisor de Video</h1>
+            <p>Transmisión en vivo</p>
+            <button id="backBtn" class="btn-secondary">← Volver al inicio</button>
+        </div>
+
+        <div class="video-container">
+            <div class="video-section">
+                <h3>Tu Cámara (Vista previa)</h3>
+                <video id="localVideo" autoplay muted playsinline></video>
+                <div class="video-controls">
+                    <button id="startBtn" class="btn-primary">📹 Iniciar Cámara</button>
+                    <button id="stopBtn" class="btn-danger" disabled>⏹ Detener</button>
+                    <button id="switchCameraBtn" class="btn-secondary" disabled>🔄 Cambiar Cámara</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="connection-panel">
+            <div class="room-info">
+                <h3>Información de Sala</h3>
+                <p>ID de Sala: <span id="roomIdDisplay">No conectado</span></p>
+                <p>Estado: <span id="connectionStatus">Desconectado</span></p>
+                <p>Receptor: <span id="receptorStatus">Esperando...</span></p>
+                <p>Transmisión: <span id="streamingStatus">Detenida</span></p>
+            </div>
+            
+            <div class="stream-controls">
+                <button id="startStreamBtn" class="btn-primary" disabled>📡 Iniciar Transmisión</button>
+                <button id="stopStreamBtn" class="btn-danger" disabled>📵 Detener Transmisión</button>
+                <button id="aiMonitorToggle" class="btn-secondary" onclick="toggleAIMonitoring()">🤖 Activar IA</button>
+            </div>
+        </div>
+
+        <div class="settings-panel">
+            <h3>Configuración de Video</h3>
+            <div class="setting-group">
+                <label for="videoQuality">Calidad de Video:</label>
+                <select id="videoQuality">
+                    <option value="low">Baja (320x240)</option>
+                    <option value="medium" selected>Media (640x480)</option>
+                    <option value="high">Alta (1280x720)</option>
+                </select>
+            </div>
+            
+            <div class="setting-group">
+                <label for="frameRate">FPS:</label>
+                <select id="frameRate">
+                    <option value="15">15 FPS</option>
+                    <option value="24">24 FPS</option>
+                    <option value="30" selected>30 FPS</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="log-panel">
+            <h3>Registro de Actividad</h3>
+            <div id="logMessages" class="log-messages"></div>
+        </div>
+    </div>
+
+    <!-- Google MediaPipe y TensorFlow.js optimizado -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+    
+    <script>
+        // Verificar que las dependencias se cargaron correctamente
+        window.addEventListener('load', function() {
+            console.log('🔍 Verificando dependencias de IA...');
+            console.log('MediaPipe Pose disponible:', typeof window.Pose !== 'undefined');
+            console.log('TensorFlow.js disponible:', typeof window.tf !== 'undefined');
+            console.log('COCO-SSD disponible:', typeof window.cocoSsd !== 'undefined');
+            
+            // Configurar MediaPipe para mejor rendimiento
+            if (window.Pose) {
+                console.log('✅ MediaPipe configurado para mejor rendimiento');
+            }
+        });
+    </script>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/webrtc-check.js"></script>
+    <script src="js/ai-baby-monitor-v2.js"></script>
+    <script src="js/caregiver-detection.js"></script>
+    <script src="js/emisor.js"></script>
+</body>
+</html>

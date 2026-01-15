@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receptor - Monitor Bebé</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Google MediaPipe y TensorFlow.js optimizado -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📺 Receptor de Video</h1>
+            <p>Visualización en vivo con Monitoreo IA</p>
+            <button id="backBtn" class="btn-secondary">← Volver al inicio</button>
+        </div>
+
+        <!-- Panel de Configuración de IA -->
+        <div id="aiSettingsModal" class="ai-settings-modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>🤖 Configuración de Cuidado IA</h3>
+                    <button onclick="closeAISettings()" class="modal-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="care-config-section">
+                        <h4>👥 Cuidadores Autorizados</h4>
+                        <p>Define quiénes pueden cuidar al bebé sin generar alertas:</p>
+                        <div class="caregiver-list">
+                            <div class="caregiver-item">
+                                <input type="text" id="caregiver1" placeholder="Nombre del cuidador 1 (ej: Mamá)" class="caregiver-input">
+                                <select class="caregiver-type">
+                                    <option value="parent">Padre/Madre</option>
+                                    <option value="family">Familiar</option>
+                                    <option value="nurse">Niñera</option>
+                                    <option value="visitor">Visitante</option>
+                                </select>
+                            </div>
+                            <div class="caregiver-item">
+                                <input type="text" id="caregiver2" placeholder="Nombre del cuidador 2 (ej: Papá)" class="caregiver-input">
+                                <select class="caregiver-type">
+                                    <option value="parent">Padre/Madre</option>
+                                    <option value="family">Familiar</option>
+                                    <option value="nurse">Niñera</option>
+                                    <option value="visitor">Visitante</option>
+                                </select>
+                            </div>
+                            <button onclick="addCaregiver()" class="btn-add-caregiver">➕ Agregar Cuidador</button>
+                        </div>
+                    </div>
+                    
+                    <div class="care-config-section">
+                        <h4>🚪 Rutinas de Cuidado</h4>
+                        <div class="routine-config">
+                            <label>
+                                <input type="checkbox" id="feedingTime"> 🍼 Horarios de alimentación
+                                <input type="time" id="feedingSchedule" class="time-input">
+                            </label>
+                            <label>
+                                <input type="checkbox" id="sleepTime"> 😴 Hora de dormir
+                                <input type="time" id="sleepSchedule" class="time-input">
+                            </label>
+                            <label>
+                                <input type="checkbox" id="playTime"> 🧨 Tiempo de juego
+                                <input type="time" id="playSchedule" class="time-input">
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="care-config-section">
+                        <h4>⚠️ Sensibilidad de Alertas</h4>
+                        <div class="sensitivity-config">
+                            <label>Movimiento del bebé:
+                                <select id="movementSensitivity">
+                                    <option value="low">Baja - Solo movimientos extremos</option>
+                                    <option value="medium" selected>Media - Movimientos significativos</option>
+                                    <option value="high">Alta - Cualquier movimiento</option>
+                                </select>
+                            </label>
+                            <label>Personas desconocidas:
+                                <select id="strangerSensitivity">
+                                    <option value="low">Baja - Solo si se acercan mucho</option>
+                                    <option value="medium" selected>Media - Personas cerca del bebé</option>
+                                    <option value="high">Alta - Cualquier persona en la habitación</option>
+                                </select>
+                            </label>
+                            <label>Objetos peligrosos:
+                                <select id="objectSensitivity">
+                                    <option value="low">Baja - Solo objetos muy peligrosos</option>
+                                    <option value="medium" selected>Media - Objetos potencialmente peligrosos</option>
+                                    <option value="high">Alta - Cualquier objeto no identificado</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="care-config-section">
+                        <h4>🔔 Tipos de Cuidado Especial</h4>
+                        <div class="special-care">
+                            <label><input type="checkbox" id="prematureBaby"> 👼 Bebé prematuro (mayor sensibilidad)</label>
+                            <label><input type="checkbox" id="sickBaby"> 🤒 Bebé enfermo (monitoreo intensivo)</label>
+                            <label><input type="checkbox" id="activeBaby"> 🏃 Bebé muy activo (movimiento normal)</label>
+                            <label><input type="checkbox" id="sleepyBaby"> 😴 Bebé que duerme mucho (menos alertas de quietud)</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button onclick="saveAISettings()" class="btn-save">💾 Guardar Configuración</button>
+                    <button onclick="resetAISettings()" class="btn-reset">🔄 Restaurar Predeterminado</button>
+                    <button onclick="closeAISettings()" class="btn-cancel">Cancelar</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Panel de Estado de IA para Receptor -->
+        <div id="aiStatusReceptor" class="ai-status-panel" style="display: none;">
+            <h4>🤖 Monitor IA - Receptor</h4>
+            <p>Recibiendo alertas del emisor...</p>
+            <div style="margin: 10px 0;">
+                <button id="testAlarmBtn" class="btn-secondary" style="margin-right: 10px;">🔊 Probar Alarma</button>
+                <button id="toggleSoundBtn" class="btn-secondary">🔇 Silenciar Sonidos</button>
+            </div>
+            <div class="ai-stats">
+                <div class="ai-stat">
+                    <strong id="alertCountReceptor">0</strong>
+                    <span>Alertas Recibidas</span>
+                </div>
+                <div class="ai-stat">
+                    <strong id="lastAlertTimeReceptor">Nunca</strong>
+                    <span>Última Alerta</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="video-container">
+            <div class="video-section full-width">
+                <div class="video-header">
+                    <h3>Transmisión Recibida</h3>
+                    <div class="ai-controls-inline">
+                        <button id="aiMonitorToggleReceptor" class="btn-ai-control" onclick="toggleAIFromReceptor()">🤖 Activar IA</button>
+                        <button id="aiSettingsBtn" class="btn-ai-settings" onclick="openAISettings()">⚙️ Configurar</button>
+                    </div>
+                </div>
+                <video id="remoteVideo" 
+                       autoplay 
+                       playsinline 
+                       muted 
+                       controls 
+                       webkit-playsinline
+                       x5-video-player-type="h5"
+                       x5-video-orientation="portrait"
+                       style="width: 100%; max-height: 70vh; object-fit: contain;"></video>
+                <div id="videoOverlay" class="video-overlay" style="display: none;">
+                    <div class="play-button-container">
+                        <svg class="play-icon" viewBox="0 0 200 200">
+                            <polygon points="70, 55 70, 145 145, 100"></polygon>
+                        </svg>
+                        <span>Toca para Reproducir</span>
+                    </div>
+                </div>
+                <div id="videoStatus" class="video-status">
+                    <p>Estado: <span id="streamStatus">Esperando transmisión...</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="connection-panel">
+            <div class="room-info">
+                <h3>Información de Conexión</h3>
+                <p>ID de Sala: <span id="roomIdDisplay">No conectado</span></p>
+                <p>Estado: <span id="connectionStatus">Desconectado</span></p>
+                <p>Emisor: <span id="emisorStatus">Esperando...</span></p>
+                <p>Receptores: <span id="receptorCount">-</span></p>
+            </div>
+            
+            <div class="reception-controls">
+                <button id="requestStreamBtn" class="btn-primary">📡 Solicitar Transmisión</button>                <button id="playVideoBtn" class="btn-primary" disabled>▶️ Reproducir Video</button>                <button id="fullscreenBtn" class="btn-secondary" disabled>🔲 Pantalla Completa</button>
+                <button id="recordBtn" class="btn-info" disabled>🎥 Grabar</button>
+                <button id="diagnosticsBtn" class="btn-warning" onclick="runConnectionDiagnostics()">🔧 Diagnóstico</button>
+            </div>
+        </div>
+
+        <div class="audio-panel">
+            <h3>Control de Audio</h3>
+            <div class="audio-controls">
+                <button id="muteBtn" class="btn-secondary">🔊 Silenciar</button>
+                <input type="range" id="volumeSlider" min="0" max="100" value="100" class="volume-slider">
+                <span id="volumeDisplay">100%</span>
+            </div>
+        </div>
+
+        <div class="quality-panel">
+            <h3>Información de Calidad</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-label">Resolución:</span>
+                    <span id="resolution">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">FPS:</span>
+                    <span id="fps">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Bitrate:</span>
+                    <span id="bitrate">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Latencia:</span>
+                    <span id="latency">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="log-panel">
+            <h3>Registro de Actividad</h3>
+            <div id="logMessages" class="log-messages"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/webrtc-check.js"></script>
+    <script src="js/alarm-sounds.js"></script>
+    <script src="js/ai-baby-monitor-v2.js"></script>
+    <script src="js/caregiver-detection.js"></script>
+    <script src="js/receptor.js"></script>
+</body>
+</html>

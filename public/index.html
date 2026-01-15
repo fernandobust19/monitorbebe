@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Bebé - Inicio</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📹 Monitor Bebé</h1>
+            <p>Sistema de videomonitoreo en tiempo real</p>
+        </div>
+
+        <div id="loginForm" class="form-container">
+            <h2>Registro de Usuario</h2>
+            <form id="userForm">
+                <div class="input-group">
+                    <label for="username">Nombre de usuario:</label>
+                    <input type="text" id="username" placeholder="Ingresa tu nombre" required>
+                </div>
+                
+                <div class="input-group">
+                    <label>Selecciona tu rol:</label>
+                    <div class="role-selection">
+                        <label class="role-option">
+                            <input type="radio" name="role" value="emisor" required>
+                            <span class="role-card">
+                                <div class="role-icon">📷</div>
+                                <div class="role-title">Emisor</div>
+                                <div class="role-desc">Transmito video desde mi cámara</div>
+                            </span>
+                        </label>
+                        
+                        <label class="role-option">
+                            <input type="radio" name="role" value="receptor" required>
+                            <span class="role-card">
+                                <div class="role-icon">📺</div>
+                                <div class="role-title">Receptor</div>
+                                <div class="role-desc">Recibo y veo el video</div>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-primary">Registrarse</button>
+            </form>
+        </div>
+
+        <div id="roomSelection" class="form-container" style="display: none;">
+            <h2>Unirse a Sala</h2>
+            <div class="user-info">
+                <p>Conectado como: <span id="currentUser"></span></p>
+                <p>Rol: <span id="currentRole"></span></p>
+            </div>
+            
+            <div class="input-group">
+                <label for="roomId">ID de la Sala:</label>
+                <input type="text" id="roomId" placeholder="Ingresa el ID de la sala" required>
+                <small>Comparte este ID con la otra persona para conectarse</small>
+            </div>
+            
+            <div class="room-actions">
+                <button id="generateRoomBtn" class="btn-secondary">Generar ID Aleatorio</button>
+                <button id="joinRoomBtn" class="btn-primary">Unirse a Sala</button>
+            </div>
+            
+            <div id="connectionStatus" class="status-info">
+                <p>Estado: <span id="statusText">Esperando conexión...</span></p>
+            </div>
+        </div>
+
+        <div id="userList" class="user-list">
+            <h3>Usuarios Conectados</h3>
+            <div id="users"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/webrtc-check.js"></script>
+    <script src="js/network-config.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

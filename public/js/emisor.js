@@ -13,6 +13,18 @@ let connectedReceptores = new Map(); // receptorId -> {username, number}
 // Variables para IA de monitoreo
 let aiMonitorEnabled = false;
 let aiMonitorInitialized = false;
+
+// Sistema de reconocimiento inteligente del bebé
+let babyRecognitionSystem = {
+    isLearning: false,
+    isLearned: false,
+    babyProfile: null,
+    learningProgress: 0,
+    capturedSamples: [],
+    requiredSamples: 10,
+    learningInterval: null
+};
+
 let aiSettings = {
     caregivers: [],
     routines: {
@@ -121,6 +133,9 @@ async function initializeApp() {
         const aiInitialized = await initializeAI();
         if (aiInitialized) {
             addLogMessage('✅ IA lista para monitoreo automático del bebé');
+            
+            // Cargar perfil del bebé guardado
+            loadSavedBabyProfile();
         } else {
             addLogMessage('⚠️ Error al inicializar IA - se reintentará al iniciar cámara');
         }
@@ -1529,4 +1544,337 @@ function copyRoomIdToClipboard() {
 function enableMultiReceptorMode() {
     addLogMessage('🔀 Modo múltiples receptores activado');
     // Las funciones ya están actualizadas en el socket handler
+}
+
+// ===========================================
+// SISTEMA DE RECONOCIMIENTO INTELIGENTE DEL BEBÉ
+// ===========================================
+
+/**
+ * Iniciar el proceso de aprendizaje del bebé
+ */
+function startBabyLearning() {
+    if (!localVideo || !localVideo.videoWidth) {
+        alert('❌ Primero inicia la cámara para poder reconocer al bebé');
+        return;
+    }
+    
+    if (!aiMonitorInitialized) {
+        alert('❌ Primero se debe inicializar el sistema de IA');
+        return;
+    }
+    
+    babyRecognitionSystem.isLearning = true;
+    babyRecognitionSystem.learningProgress = 0;
+    babyRecognitionSystem.capturedSamples = [];
+    
+    // Actualizar UI
+    updateRecognitionUI();
+    
+    // Mostrar panel de progreso
+    const progressPanel = document.getElementById('learningProgress');
+    if (progressPanel) progressPanel.style.display = 'block';
+    
+    addLogMessage('🎯 Iniciando aprendizaje del bebé...');
+    
+    // Comenzar captura de muestras
+    let sampleCount = 0;
+    babyRecognitionSystem.learningInterval = setInterval(async () => {
+        if (sampleCount >= babyRecognitionSystem.requiredSamples) {
+            completeBabyLearning();
+            return;
+        }
+        
+        const sample = await captureBabySample();
+        if (sample) {
+            babyRecognitionSystem.capturedSamples.push(sample);
+            sampleCount++;
+            babyRecognitionSystem.learningProgress = (sampleCount / babyRecognitionSystem.requiredSamples) * 100;
+            
+            updateLearningProgress();
+            updateLearningTips(sampleCount);
+        }
+        
+    }, 2000); // Capturar una muestra cada 2 segundos
+}
+
+/**
+ * Completar el proceso de aprendizaje del bebé
+ */
+function completeBabyLearning() {
+    clearInterval(babyRecognitionSystem.learningInterval);
+    
+    if (babyRecognitionSystem.capturedSamples.length < 5) {
+        alert('❌ No se capturaron suficientes muestras. Inténtalo de nuevo.');
+        resetBabyLearning();
+        return;
+    }
+    
+    // Procesar muestras y crear perfil del bebé
+    babyRecognitionSystem.babyProfile = createBabyProfile(babyRecognitionSystem.capturedSamples);
+    babyRecognitionSystem.isLearned = true;
+    babyRecognitionSystem.isLearning = false;
+    
+    // Guardar en localStorage
+    localStorage.setItem('babyProfile', JSON.stringify(babyRecognitionSystem.babyProfile));
+    
+    // Actualizar UI
+    updateRecognitionUI();
+    
+    // Ocultar panel de progreso
+    const progressPanel = document.getElementById('learningProgress');
+    if (progressPanel) progressPanel.style.display = 'none';
+    
+    addLogMessage('🎉 ¡Bebé reconocido exitosamente! IA personalizada activada');
+    
+    // Actualizar sistema de IA con el perfil del bebé
+    if (window.babyAIMonitor) {
+        window.babyAIMonitor.setBabyProfile(babyRecognitionSystem.babyProfile);
+    }
+}
+
+/**
+ * Resetear el aprendizaje del bebé
+ */
+function resetBabyLearning() {
+    if (babyRecognitionSystem.learningInterval) {
+        clearInterval(babyRecognitionSystem.learningInterval);
+    }
+    
+    babyRecognitionSystem.isLearning = false;
+    babyRecognitionSystem.isLearned = false;
+    babyRecognitionSystem.babyProfile = null;
+    babyRecognitionSystem.learningProgress = 0;
+    babyRecognitionSystem.capturedSamples = [];
+    
+    // Limpiar localStorage
+    localStorage.removeItem('babyProfile');
+    
+    // Actualizar UI
+    updateRecognitionUI();
+    
+    // Ocultar panel de progreso
+    const progressPanel = document.getElementById('learningProgress');
+    if (progressPanel) progressPanel.style.display = 'none';
+    
+    addLogMessage('🔄 Reconocimiento del bebé reiniciado');
+    
+    // Actualizar sistema de IA
+    if (window.babyAIMonitor) {
+        window.babyAIMonitor.setBabyProfile(null);
+    }
+}
+
+/**
+ * Actualizar UI del sistema de reconocimiento
+ */
+function updateRecognitionUI() {
+    const statusElement = document.getElementById('recognitionStatus');
+    const learnedElement = document.getElementById('babyLearned');
+    const learnBtn = document.getElementById('learnBabyBtn');
+    const resetBtn = document.getElementById('resetLearningBtn');
+    
+    if (babyRecognitionSystem.isLearning) {
+        if (statusElement) statusElement.textContent = 'Aprendiendo...';
+        if (learnedElement) learnedElement.textContent = 'En proceso';
+        if (learnBtn) {
+            learnBtn.textContent = '⏳ Aprendiendo...';
+            learnBtn.disabled = true;
+        }
+    } else if (babyRecognitionSystem.isLearned) {
+        if (statusElement) statusElement.textContent = 'Bebé reconocido ✅';
+        if (learnedElement) learnedElement.textContent = 'Sí';
+        if (learnBtn) {
+            learnBtn.textContent = '✅ Bebé Reconocido';
+            learnBtn.disabled = false;
+        }
+        if (resetBtn) resetBtn.disabled = false;
+    } else {
+        if (statusElement) statusElement.textContent = 'No entrenado';
+        if (learnedElement) learnedElement.textContent = 'No';
+        if (learnBtn) {
+            learnBtn.textContent = '🎯 Reconocer Mi Bebé';
+            learnBtn.disabled = false;
+        }
+        if (resetBtn) resetBtn.disabled = true;
+    }
+}
+
+/**
+ * Actualizar barra de progreso
+ */
+function updateLearningProgress() {
+    const progressFill = document.getElementById('progressFill');
+    if (progressFill) {
+        progressFill.style.width = `${babyRecognitionSystem.learningProgress}%`;
+    }
+}
+
+/**
+ * Actualizar consejos durante el aprendizaje
+ */
+function updateLearningTips(sampleCount) {
+    const tipsElement = document.getElementById('learningTips');
+    if (!tipsElement) return;
+    
+    const tips = [
+        'Mantén al bebé visible en el centro',
+        'Asegúrate de que esté bien iluminado',
+        'Evita movimientos bruscos',
+        'Muestra diferentes posiciones del bebé',
+        'Mantén la cámara estable',
+        'El bebé puede estar con o sin gorra',
+        'Puede estar acostado o despierto',
+        'Incluye momentos de alimentación',
+        'Capturando características finales...',
+        '¡Casi terminado!'
+    ];
+    
+    if (sampleCount < tips.length) {
+        tipsElement.textContent = tips[sampleCount];
+    }
+}
+
+/**
+ * Cargar perfil del bebé guardado
+ */
+function loadSavedBabyProfile() {
+    const saved = localStorage.getItem('babyProfile');
+    if (saved) {
+        try {
+            babyRecognitionSystem.babyProfile = JSON.parse(saved);
+            babyRecognitionSystem.isLearned = true;
+            updateRecognitionUI();
+            
+            // Actualizar sistema de IA con el perfil cargado
+            if (window.babyAIMonitor) {
+                window.babyAIMonitor.setBabyProfile(babyRecognitionSystem.babyProfile);
+            }
+            
+            addLogMessage('👶 Perfil del bebé cargado desde memoria');
+            return true;
+        } catch (error) {
+            console.error('Error cargando perfil del bebé:', error);
+            localStorage.removeItem('babyProfile');
+        }
+    }
+    return false;
+}
+
+/**
+ * Capturar una muestra del bebé para aprendizaje
+ */
+async function captureBabySample() {
+    if (!window.babyAIMonitor || !window.babyAIMonitor.detectionModel) {
+        return null;
+    }
+    
+    try {
+        // Usar el canvas del sistema de IA para análisis
+        const canvas = window.babyAIMonitor.canvas;
+        const ctx = window.babyAIMonitor.ctx;
+        
+        if (!canvas || !ctx) return null;
+        
+        // Actualizar canvas con frame actual
+        canvas.width = localVideo.videoWidth;
+        canvas.height = localVideo.videoHeight;
+        ctx.drawImage(localVideo, 0, 0, canvas.width, canvas.height);
+        
+        // Detectar personas en el frame
+        const predictions = await window.babyAIMonitor.detectionModel.detect(canvas);
+        const people = predictions.filter(p => p.class === 'person' && p.score > 0.6);
+        
+        if (people.length === 1) {
+            // Idealmente solo una persona (el bebé) en el frame
+            const person = people[0];
+            const bbox = person.bbox;
+            
+            // Extraer características del bebé
+            const characteristics = extractBabyCharacteristics(bbox, canvas);
+            
+            return {
+                timestamp: Date.now(),
+                bbox: bbox,
+                characteristics: characteristics,
+                confidence: person.score,
+                frameSize: { width: canvas.width, height: canvas.height }
+            };
+        }
+        
+        return null;
+        
+    } catch (error) {
+        console.error('Error capturando muestra del bebé:', error);
+        return null;
+    }
+}
+
+/**
+ * Extraer características específicas del bebé
+ */
+function extractBabyCharacteristics(bbox, canvas) {
+    const [x, y, width, height] = bbox;
+    
+    // Características básicas
+    const centerX = x + width / 2;
+    const centerY = y + height / 2;
+    const area = width * height;
+    const aspectRatio = width / height;
+    
+    return {
+        // Características físicas
+        size: { width, height, area },
+        aspectRatio,
+        position: { centerX, centerY },
+        relativeSize: area / (canvas.width * canvas.height),
+        
+        // Posición típica en la imagen
+        preferredZone: {
+            horizontal: centerX / canvas.width,
+            vertical: centerY / canvas.height
+        }
+    };
+}
+
+/**
+ * Crear perfil del bebé a partir de las muestras capturadas
+ */
+function createBabyProfile(samples) {
+    if (!samples.length) return null;
+    
+    // Promediar características
+    const profile = {
+        id: `baby_${Date.now()}`,
+        learnedAt: new Date().toISOString(),
+        sampleCount: samples.length,
+        
+        // Tamaño promedio
+        avgSize: {
+            width: samples.reduce((sum, s) => sum + s.bbox[2], 0) / samples.length,
+            height: samples.reduce((sum, s) => sum + s.bbox[3], 0) / samples.length,
+            area: samples.reduce((sum, s) => sum + s.characteristics.size.area, 0) / samples.length
+        },
+        
+        // Proporción típica
+        avgAspectRatio: samples.reduce((sum, s) => sum + s.characteristics.aspectRatio, 0) / samples.length,
+        
+        // Tamaño relativo típico en la imagen
+        avgRelativeSize: samples.reduce((sum, s) => sum + s.characteristics.relativeSize, 0) / samples.length,
+        
+        // Zona preferida en la imagen
+        preferredZone: {
+            horizontal: samples.reduce((sum, s) => sum + s.characteristics.preferredZone.horizontal, 0) / samples.length,
+            vertical: samples.reduce((sum, s) => sum + s.characteristics.preferredZone.vertical, 0) / samples.length
+        },
+        
+        // Rangos de tolerancia
+        tolerances: {
+            sizeVariation: 0.4,    // 40% de variación en tamaño para bebés que crecen
+            positionVariation: 0.3, // 30% de variación en posición 
+            aspectRatioVariation: 0.3 // 30% de variación en proporciones (acostado vs parado)
+        }
+    };
+    
+    return profile;
 }

@@ -49,7 +49,26 @@ class BabyAIMonitorV2 {
         this.lastBodyDetectionTime = Date.now();
         this.currentAlert = null; // Para mostrar solo una alerta a la vez
         
+        // Sistema de perfil personalizado del bebé
+        this.babyProfile = null;
+        this.recognitionMode = 'generic'; // 'generic' o 'personalized'
+        
         console.log('🤖 Sistema de IA V2 con Google MediaPipe inicializado');
+    }
+    
+    /**
+     * Establecer perfil personalizado del bebé
+     */
+    setBabyProfile(profile) {
+        this.babyProfile = profile;
+        this.recognitionMode = profile ? 'personalized' : 'generic';
+        
+        if (profile) {
+            console.log('👶 Perfil personalizado del bebé cargado:', profile.id);
+            console.log(`📊 Aprendido: ${profile.learnedAt}, Muestras: ${profile.sampleCount}`);
+        } else {
+            console.log('🔄 Modo genérico de detección activado');
+        }
     }
     
     updateSettings(newSettings) {
@@ -514,43 +533,85 @@ class BabyAIMonitorV2 {
         const centerX = x + width / 2;
         const centerY = y + height / 2;
         const area = width * height;
+        const aspectRatio = width / height;
         
         const imageWidth = this.canvas.width;
         const imageHeight = this.canvas.height;
+        const relativeSize = area / (imageWidth * imageHeight);
         
-        // Detección más sensible y automática del bebé
-        const isInBabyArea = (
-            centerX > imageWidth * 0.15 && centerX < imageWidth * 0.85 &&
-            centerY > imageHeight * 0.2 && centerY < imageHeight * 0.95
-        );
+        let isBaby = false;
+        let confidence = 0;
         
-        // Criterios más amplios para detectar bebés
-        const isAppropriateSize = (
-            width < imageWidth * 0.75 && height < imageHeight * 0.8 &&
-            area > (imageWidth * imageHeight * 0.02) // Mínimo 2% del área total
-        );
-        
-        // Detectar automáticamente como bebé si cumple criterios básicos
-        const isBaby = isInBabyArea && isAppropriateSize;
+        if (this.recognitionMode === 'personalized' && this.babyProfile) {
+            // === MODO PERSONALIZADO - Usar perfil específico del bebé ===
+            isBaby = this.matchesBabyProfile(bbox, aspectRatio, relativeSize, centerX, centerY);
+            confidence = this.calculateProfileMatchConfidence(bbox, aspectRatio, relativeSize);
+        } else {
+            // === MODO GENÉRICO - Detección general ===
+            const isInBabyArea = (
+                centerX > imageWidth * 0.1 && centerX < imageWidth * 0.9 &&
+                centerY > imageHeight * 0.15 && centerY < imageHeight * 0.95
+            );
+            
+            const isAppropriateSize = (
+                width < imageWidth * 0.8 && height < imageHeight * 0.85 &&
+                area > (imageWidth * imageHeight * 0.015) // Mínimo 1.5% del área total
+            );
+            
+            isBaby = isInBabyArea && isAppropriateSize;
+            confidence = isBaby ? 0.7 : 0.3;
+        }
         
         if (isBaby) {
             // Actualizar tiempo de última detección del bebé
             this.lastBabyDetectionTime = Date.now();
             
-            // Analizar postura del bebé basado en proporciones
-            const aspectRatio = width / height;
+            // === ANÁLISIS INTELIGENTE DE POSTURA PARA BEBÉ ===
             let posture = 'unknown';
             let activity = 'resting';
+            let ageCategory = this.determineAgeCategory(relativeSize, aspectRatio);
             
-            if (aspectRatio > 1.2) {
-                posture = 'lying_horizontal';
-                activity = 'sleeping_or_resting';
-            } else if (aspectRatio < 0.6) {
-                posture = 'standing_or_sitting';
-                activity = height > imageHeight * 0.4 ? 'standing' : 'sitting';
+            // Análisis específico por edad y postura
+            if (ageCategory === 'newborn') {
+                // RECIÉN NACIDO - principalmente acostado
+                if (aspectRatio > 1.1) {
+                    posture = 'lying_horizontal';
+                    activity = 'sleeping_or_resting';
+                } else if (aspectRatio > 0.8) {
+                    posture = 'lying_curled';
+                    activity = 'sleeping_or_resting';
+                } else {
+                    // Un recién nacido NO debería estar "de pie"
+                    posture = 'held_vertical'; // Probablemente cargado
+                    activity = 'being_fed_or_held';
+                }
+            } else if (ageCategory === 'infant') {
+                // BEBÉ MAYOR - puede sentarse y moverse más
+                if (aspectRatio > 1.3) {
+                    posture = 'lying_horizontal';
+                    activity = 'sleeping_or_resting';
+                } else if (aspectRatio < 0.6) {
+                    posture = 'sitting_or_supported';
+                    activity = 'sitting_alert';
+                } else if (aspectRatio < 0.8) {
+                    posture = 'crawling_or_moving';
+                    activity = 'active';
+                } else {
+                    posture = 'lying_or_resting';
+                    activity = 'resting';
+                }
             } else {
-                posture = 'sitting_or_crawling';
-                activity = 'active';
+                // BEBÉ ACTIVO - puede estar de pie, gateando, etc.
+                if (aspectRatio > 1.2) {
+                    posture = 'lying_horizontal';
+                    activity = 'sleeping_or_resting';
+                } else if (aspectRatio < 0.6) {
+                    posture = 'standing_or_walking';
+                    activity = height > imageHeight * 0.5 ? 'standing' : 'sitting';
+                } else {
+                    posture = 'crawling_or_playing';
+                    activity = 'active';
+                }
             }
             
             // Determinar posición en la imagen
@@ -563,16 +624,142 @@ class BabyAIMonitorV2 {
             
             return {
                 isBaby: true,
+                confidence: confidence,
                 posture,
                 activity,
                 position,
                 area,
                 aspectRatio,
-                location: { x: centerX, y: centerY }
+                ageCategory,
+                relativeSize,
+                location: { x: centerX, y: centerY },
+                
+                // Información adicional para contexto
+                feedingContext: this.detectFeedingContext(bbox),
+                sleepingContext: this.detectSleepingContext(posture, activity),
+                safetyContext: this.detectSafetyContext(position, posture)
             };
         }
         
-        return { isBaby: false };
+        return { isBaby: false, confidence: 0 };
+    }
+    
+    /**
+     * Verificar si la detección coincide con el perfil personalizado del bebé
+     */
+    matchesBabyProfile(bbox, aspectRatio, relativeSize, centerX, centerY) {
+        if (!this.babyProfile) return false;
+        
+        const profile = this.babyProfile;
+        const tolerances = profile.tolerances;
+        
+        // Verificar tamaño relativo
+        const sizeMatch = Math.abs(relativeSize - profile.avgRelativeSize) <= 
+                         (profile.avgRelativeSize * tolerances.sizeVariation);
+        
+        // Verificar proporción (más flexible para diferentes posturas)
+        const aspectRatioMatch = Math.abs(aspectRatio - profile.avgAspectRatio) <= 
+                                (profile.avgAspectRatio * tolerances.aspectRatioVariation);
+        
+        // Verificar posición típica (zona preferida)
+        const normalizedX = centerX / this.canvas.width;
+        const normalizedY = centerY / this.canvas.height;
+        
+        const positionMatchX = Math.abs(normalizedX - profile.preferredZone.horizontal) <= tolerances.positionVariation;
+        const positionMatchY = Math.abs(normalizedY - profile.preferredZone.vertical) <= tolerances.positionVariation;
+        
+        // El bebé debe coincidir en al menos 2 de 3 criterios principales
+        const matchCount = (sizeMatch ? 1 : 0) + (aspectRatioMatch ? 1 : 0) + 
+                          ((positionMatchX && positionMatchY) ? 1 : 0);
+        
+        return matchCount >= 2;
+    }
+    
+    /**
+     * Calcular confianza de coincidencia con el perfil
+     */
+    calculateProfileMatchConfidence(bbox, aspectRatio, relativeSize) {
+        if (!this.babyProfile) return 0.5;
+        
+        const profile = this.babyProfile;
+        const [x, y, width, height] = bbox;
+        const centerX = x + width / 2;
+        const centerY = y + height / 2;
+        
+        // Calcular similitud en diferentes aspectos
+        const sizeSimilarity = 1 - Math.min(1, Math.abs(relativeSize - profile.avgRelativeSize) / profile.avgRelativeSize);
+        const aspectSimilarity = 1 - Math.min(1, Math.abs(aspectRatio - profile.avgAspectRatio) / profile.avgAspectRatio);
+        
+        const normalizedX = centerX / this.canvas.width;
+        const normalizedY = centerY / this.canvas.height;
+        const positionSimilarityX = 1 - Math.min(1, Math.abs(normalizedX - profile.preferredZone.horizontal));
+        const positionSimilarityY = 1 - Math.min(1, Math.abs(normalizedY - profile.preferredZone.vertical));
+        const positionSimilarity = (positionSimilarityX + positionSimilarityY) / 2;
+        
+        // Promedio ponderado de las similitudes
+        const confidence = (sizeSimilarity * 0.4 + aspectSimilarity * 0.35 + positionSimilarity * 0.25);
+        
+        return Math.max(0.6, Math.min(0.95, confidence)); // Entre 60% y 95%
+    }
+    
+    /**
+     * Determinar categoría de edad basada en tamaño y proporciones
+     */
+    determineAgeCategory(relativeSize, aspectRatio) {
+        // Bebé muy pequeño en la imagen = recién nacido
+        if (relativeSize < 0.05) return 'newborn';
+        
+        // Bebé mediano con proporciones típicas de bebé que no camina
+        if (relativeSize < 0.15 && aspectRatio > 0.7) return 'infant';
+        
+        // Bebé más grande o activo
+        return 'active_baby';
+    }
+    
+    /**
+     * Detectar contexto de alimentación
+     */
+    detectFeedingContext(bbox) {
+        // Analizar si el bebé podría estar siendo alimentado
+        const aspectRatio = bbox[2] / bbox[3];
+        const position = bbox[1] / this.canvas.height;
+        
+        // Bebé en posición vertical en la parte superior podría estar siendo alimentado
+        const isPossiblyFeeding = aspectRatio < 0.8 && position < 0.4;
+        
+        return {
+            possiblyFeeding: isPossiblyFeeding,
+            context: isPossiblyFeeding ? 'vertical_position_suggests_feeding' : 'normal_position'
+        };
+    }
+    
+    /**
+     * Detectar contexto de sueño
+     */
+    detectSleepingContext(posture, activity) {
+        const isSleeping = activity === 'sleeping_or_resting' && 
+                          (posture.includes('lying') || posture.includes('curled'));
+        
+        return {
+            isSleeping: isSleeping,
+            sleepPosition: isSleeping ? posture : null
+        };
+    }
+    
+    /**
+     * Detectar contexto de seguridad
+     */
+    detectSafetyContext(position, posture) {
+        const isNearEdge = position.includes('left') || position.includes('right') || 
+                          position.includes('top') || position.includes('bottom');
+        
+        const isInPotentiallyUnsafePosition = posture === 'standing_or_walking' && isNearEdge;
+        
+        return {
+            nearEdge: isNearEdge,
+            potentiallyUnsafe: isInPotentiallyUnsafePosition,
+            recommendation: isInPotentiallyUnsafePosition ? 'monitor_closely' : 'normal_monitoring'
+        };
     }
     
     isFaceVisible(bbox, babyAnalysis) {
@@ -640,22 +827,139 @@ class BabyAIMonitorV2 {
     }
     
     analyzebabyActivity(babyState, bbox) {
-        // Análisis detallado de la actividad del bebé
+        // === ANÁLISIS INTELIGENTE DE ACTIVIDAD DEL BEBÉ ===
         const currentTime = Date.now();
+        const ageCategory = babyState.ageCategory || 'infant';
         
-        // Detectar diferentes estados y actividades
+        // === CONTEXTO INTELIGENTE ===
+        // No alertar si el bebé está siendo alimentado
+        if (babyState.feedingContext && babyState.feedingContext.possiblyFeeding) {
+            this.lastActiveTime = currentTime; // Resetear timers
+            this.lastStandingTime = null;
+            return; // Actividad normal de alimentación
+        }
+        
+        // No alertar excesivamente si está durmiendo en posición segura
+        if (babyState.sleepingContext && babyState.sleepingContext.isSleeping) {
+            if (babyState.sleepingContext.sleepPosition === 'lying_horizontal') {
+                // Posición de sueño segura, solo verificar tiempo excesivo
+                this.checkExcessiveSleep(currentTime);
+                return;
+            }
+        }
+        
+        // === ANÁLISIS POR EDAD Y ACTIVIDAD ===
+        switch (ageCategory) {
+            case 'newborn':
+                this.analyzeNewbornActivity(babyState, currentTime);
+                break;
+            case 'infant':
+                this.analyzeInfantActivity(babyState, currentTime);
+                break;
+            case 'active_baby':
+                this.analyzeActiveBabyActivity(babyState, currentTime);
+                break;
+        }
+        
+        // === VERIFICACIONES DE SEGURIDAD UNIVERSALES ===
+        if (babyState.safetyContext && babyState.safetyContext.potentiallyUnsafe) {
+            this.triggerAlert('safety_concern', {
+                severity: 'high',
+                message: '⚠️ Bebé en posición potencialmente insegura - verificar',
+                confidence: 0.8,
+                details: { 
+                    position: babyState.position,
+                    posture: babyState.posture,
+                    risk: 'position_safety'
+                }
+            });
+        }
+        
+        this.lastBabyState = babyState;
+        this.lastActivityTime = currentTime;
+    }
+    
+    /**
+     * Análisis específico para recién nacidos
+     */
+    analyzeNewbornActivity(babyState, currentTime) {
         switch (babyState.activity) {
             case 'standing':
-                // Solo alertar si el bebé lleva mucho tiempo de pie (riesgo de caída)
-                if (!this.lastStandingTime) this.lastStandingTime = currentTime;
-                if (currentTime - this.lastStandingTime > 30000) { // 30 segundos de pie
-                    this.triggerAlert('baby_standing', {
+            case 'standing_or_walking':
+                // ¡UN RECIÉN NACIDO NO DEBERÍA ESTAR DE PIE!
+                this.triggerAlert('newborn_unexpected_position', {
+                    severity: 'high',
+                    message: '🚨 Posición inusual para recién nacido - verificar si está siendo cargado',
+                    confidence: 0.9,
+                    details: { 
+                        ageCategory: 'newborn',
+                        expectedPosition: 'lying_down',
+                        actualPosition: babyState.posture,
+                        suggestion: 'verify_being_held_or_fed'
+                    }
+                });
+                break;
+                
+            case 'being_fed_or_held':
+                // Posición normal para alimentación
+                this.lastActiveTime = currentTime;
+                break;
+                
+            case 'sleeping_or_resting':
+                // Normal para recién nacidos
+                this.checkExcessiveSleep(currentTime);
+                break;
+        }
+    }
+    
+    /**
+     * Análisis específico para bebés (3-12 meses)
+     */
+    analyzeInfantActivity(babyState, currentTime) {
+        switch (babyState.activity) {
+            case 'sitting_alert':
+                // Normal para bebés que ya se sientan
+                this.lastActiveTime = currentTime;
+                this.lastStandingTime = null;
+                break;
+                
+            case 'active':
+                // Movimiento normal, solo alertar si es excesivo o cerca de bordes
+                if (this.isNearEdge(babyState.location)) {
+                    this.triggerAlert('baby_near_edge', {
                         severity: 'medium',
-                        message: '🧑 Bebé de pie por mucho tiempo - vigilar para prevenir caídas',
+                        message: '👶 Bebé activo cerca del borde - supervisar de cerca',
+                        confidence: 0.7,
+                        details: { 
+                            position: babyState.position,
+                            activity: babyState.activity
+                        }
+                    });
+                }
+                this.lastActiveTime = currentTime;
+                break;
+                
+            case 'sleeping_or_resting':
+                this.checkExcessiveSleep(currentTime);
+                break;
+        }
+    }
+    
+    /**
+     * Análisis específico para bebés activos (12+ meses)
+     */
+    analyzeActiveBabyActivity(babyState, currentTime) {
+        switch (babyState.activity) {
+            case 'standing':
+                // Para bebés activos, estar de pie es más normal
+                // Solo alertar si está mucho tiempo en posición riesgosa
+                if (!this.lastStandingTime) this.lastStandingTime = currentTime;
+                if (currentTime - this.lastStandingTime > 60000 && this.isNearEdge(babyState.location)) { // 1 minuto
+                    this.triggerAlert('active_baby_edge_risk', {
+                        severity: 'medium',
+                        message: '⚠️ Bebé de pie cerca del borde por mucho tiempo',
                         confidence: 0.8,
                         details: { 
-                            posture: babyState.posture, 
-                            location: babyState.position,
                             standingDuration: Math.round((currentTime - this.lastStandingTime) / 1000),
                             risk: 'fall_risk'
                         }
@@ -663,54 +967,49 @@ class BabyAIMonitorV2 {
                 }
                 break;
                 
-            case 'sitting':
-                // Posición estable, no necesita alerta constante
-                // Solo resetear timer de pie si existía
+            case 'active':
+                // Movimiento normal para bebés activos
+                if (this.isNearEdge(babyState.location)) {
+                    // Solo alertar ocasionalmente para bebés muy activos cerca de bordes
+                    if (!this.lastEdgeWarning || currentTime - this.lastEdgeWarning > 60000) {
+                        this.triggerAlert('active_baby_edge_activity', {
+                            severity: 'low',
+                            message: '👶 Bebé muy activo cerca del borde',
+                            confidence: 0.6,
+                            details: { 
+                                activity: 'active_near_edge'
+                            }
+                        });
+                        this.lastEdgeWarning = currentTime;
+                    }
+                }
+                this.lastActiveTime = currentTime;
                 this.lastStandingTime = null;
                 break;
                 
-            case 'active':
-                // Solo alertar si hay mucha actividad continuada o movimiento hacia bordes
-                if (babyState.aspectRatio > 0.8 && babyState.aspectRatio < 1.1) {
-                    // Solo si está cerca de un borde o ha estado activo por mucho tiempo
-                    if (this.isNearEdge(babyState.location) || this.lastActiveTime && (currentTime - this.lastActiveTime > 300000)) {
-                        this.triggerAlert('baby_crawling', {
-                            severity: 'low', // Reducido de medium
-                            message: '👶 Bebé gateando activamente - mantener supervisión',
-                            confidence: 0.6,
-                            details: { 
-                                activity: 'crawling', 
-                                direction: this.detectMovementDirection(),
-                                location: babyState.position,
-                                nearEdge: this.isNearEdge(babyState.location)
-                            }
-                        });
-                        this.lastActiveTime = currentTime; // Reset para evitar spam
-                    }
-                }
-                // Solo inicializar tiempo si no existe
-                if (!this.lastActiveTime) this.lastActiveTime = currentTime;
-                break;
-                
             case 'sleeping_or_resting':
-                // Solo verificar si ha estado durmiendo por MUY mucho tiempo (3+ horas)
-                if (this.lastActivityTime && (currentTime - this.lastActivityTime > 10800000)) { // 3 horas
-                    this.triggerAlert('very_long_sleep', {
-                        severity: 'medium',
-                        message: '😴 Bebé durmiendo por mucho tiempo - verificar bienestar ocasionalmente',
-                        confidence: 0.5, // Menor confianza porque dormir es normal
-                        details: { 
-                            sleepDuration: Math.floor((currentTime - this.lastActivityTime) / 60000),
-                            hoursAsleep: Math.floor((currentTime - this.lastActivityTime) / 3600000)
-                        }
-                    });
-                }
-                // Resetear otros timers de actividad
-                this.lastActiveTime = null;
+                this.checkExcessiveSleep(currentTime);
                 break;
         }
-        
-        // Detectar si el bebé se acerca a los bordes (riesgo de caída)
+    }
+    
+    /**
+     * Verificar sueño excesivo (común a todas las edades)
+     */
+    checkExcessiveSleep(currentTime) {
+        // Solo verificar si ha estado durmiendo por MUY mucho tiempo
+        if (this.lastActivityTime && (currentTime - this.lastActivityTime > 14400000)) { // 4 horas
+            this.triggerAlert('very_long_sleep', {
+                severity: 'low', // Reducido porque dormir mucho puede ser normal
+                message: '😴 Bebé durmiendo por mucho tiempo - verificar bienestar ocasionalmente',
+                confidence: 0.4, // Baja confianza porque puede ser normal
+                details: { 
+                    sleepDuration: Math.floor((currentTime - this.lastActivityTime) / 60000),
+                    hoursAsleep: Math.floor((currentTime - this.lastActivityTime) / 3600000)
+                }
+            });
+        }
+    }
         if (this.isNearEdge(babyState.location)) {
             this.triggerAlert('edge_risk', {
                 severity: 'high',

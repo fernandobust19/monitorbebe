@@ -40,6 +40,26 @@
                 <button id="stopStreamBtn" class="btn-danger" disabled>📵 Detener Transmisión</button>
                 <button id="aiMonitorToggle" class="btn-secondary" onclick="toggleAIMonitoring()">🤖 Activar IA</button>
             </div>
+            
+            <!-- Panel de Reconocimiento Inteligente del Bebé -->
+            <div class="baby-recognition-panel">
+                <h3>👶 Reconocimiento Inteligente</h3>
+                <div class="recognition-status">
+                    <p>Estado: <span id="recognitionStatus">No entrenado</span></p>
+                    <p>Bebé aprendido: <span id="babyLearned">No</span></p>
+                </div>
+                <div class="recognition-controls">
+                    <button id="learnBabyBtn" class="btn-special" onclick="startBabyLearning()">🎯 Reconocer Mi Bebé</button>
+                    <button id="resetLearningBtn" class="btn-warning" onclick="resetBabyLearning()" disabled>🔄 Reiniciar Aprendizaje</button>
+                </div>
+                <div id="learningProgress" class="learning-progress" style="display: none;">
+                    <p>📸 Capturando características del bebé...</p>
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <p id="learningTips">Mantén al bebé visible en el centro</p>
+                </div>
+            </div>
         </div>
 
         <div class="settings-panel">

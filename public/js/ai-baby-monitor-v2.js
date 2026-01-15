@@ -86,34 +86,72 @@ class BabyAIMonitorV2 {
         try {
             console.log('🚀 Inicializando sistema avanzado de IA...');
             
-            // Inicializar Google MediaPipe Pose
-            if (window.Pose) {
-                console.log('📡 Configurando MediaPipe Pose...');
-                this.pose = new window.Pose({
-                    locateFile: (file) => {
-                        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
-                    }
-                });
-                
-                this.pose.setOptions({
-                    modelComplexity: 0, // 0=lite, 1=full, 2=heavy - usamos lite para mejor rendimiento
-                    smoothLandmarks: true,
-                    enableSegmentation: false,
-                    smoothSegmentation: false,
-                    minDetectionConfidence: 0.5,
-                    minTrackingConfidence: 0.5
-                });
-                
-                console.log('✅ MediaPipe Pose configurado');
+            // Verificar dependencias críticas antes de continuar
+            if (!window.tf) {
+                throw new Error('TensorFlow.js no está disponible');
             }
             
-            // Cargar modelo de detección COCO-SSD (más ligero)
-            if (window.cocoSsd) {
-                console.log('📦 Cargando modelo de detección de objetos...');
-                this.detectionModel = await window.cocoSsd.load({
-                    base: 'lite_mobilenet_v2' // Versión más ligera
-                });
-                console.log('✅ Modelo de detección cargado (versión ligera)');
+            if (!window.cocoSsd) {
+                throw new Error('COCO-SSD no está disponible');
+            }
+            
+            // Inicializar Google MediaPipe Pose (opcional)
+            if (window.Pose) {
+                console.log('📡 Configurando MediaPipe Pose...');
+                try {
+                    this.pose = new window.Pose({
+                        locateFile: (file) => {
+                            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+                        }
+                    });
+                    
+                    this.pose.setOptions({
+                        modelComplexity: 0, // 0=lite, 1=full, 2=heavy - usamos lite para mejor rendimiento
+                        smoothLandmarks: true,
+                        enableSegmentation: false,
+                        smoothSegmentation: false,
+                        minDetectionConfidence: 0.5,
+                        minTrackingConfidence: 0.5
+                    });
+                    
+                    console.log('✅ MediaPipe Pose configurado');
+                } catch (poseError) {
+                    console.warn('⚠️ MediaPipe Pose no disponible, usando modo básico:', poseError.message);
+                    this.pose = null;
+                }
+            } else {
+                console.log('⚠️ MediaPipe Pose no disponible, usando modo básico');
+            }
+            
+            // Cargar modelo de detección COCO-SSD con reintentos
+            console.log('📦 Cargando modelo de detección de objetos...');
+            let retries = 0;
+            const maxRetries = 3;
+            
+            while (retries < maxRetries) {
+                try {
+                    this.detectionModel = await Promise.race([
+                        window.cocoSsd.load({
+                            base: 'lite_mobilenet_v2' // Versión más ligera
+                        }),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Timeout loading model')), 20000)
+                        )
+                    ]);
+                    
+                    console.log('✅ Modelo de detección cargado (versión ligera)');
+                    break;
+                } catch (modelError) {
+                    retries++;
+                    console.warn(`⚠️ Error cargando modelo (intento ${retries}/${maxRetries}):`, modelError.message);
+                    
+                    if (retries >= maxRetries) {
+                        throw new Error(`No se pudo cargar el modelo después de ${maxRetries} intentos`);
+                    }
+                    
+                    // Esperar antes del próximo intento
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
             }
             
             // Crear canvas optimizado
@@ -123,6 +161,10 @@ class BabyAIMonitorV2 {
                 desynchronized: true // Mejor rendimiento
             });
             
+            if (!this.ctx) {
+                throw new Error('No se pudo crear el contexto 2D del canvas');
+            }
+            
             this.isInitialized = true;
             console.log('🎉 Sistema de IA V2 inicializado correctamente');
             
@@ -130,6 +172,20 @@ class BabyAIMonitorV2 {
             
         } catch (error) {
             console.error('❌ Error al inicializar IA V2:', error);
+            this.isInitialized = false;
+            
+            // Limpiar recursos en caso de error
+            if (this.pose) {
+                try {
+                    this.pose.close();
+                } catch (e) {}
+                this.pose = null;
+            }
+            
+            if (this.detectionModel) {
+                this.detectionModel = null;
+            }
+            
             return false;
         }
     }

@@ -60,6 +60,88 @@ const STATUS_MESSAGES = {
     error: 'Error de conexión'
 };
 
+// Función de diagnóstico para problemas de conexión/IA
+async function runDiagnostics() {
+    addLogMessage('🔍 Ejecutando diagnóstico del sistema...');
+    
+    // Verificar conexión a internet
+    try {
+        const response = await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors' });
+        addLogMessage('✅ Conexión a internet: OK');
+    } catch (error) {
+        addLogMessage('❌ Sin conexión a internet - Esto afectará la carga de modelos de IA');
+        return false;
+    }
+    
+    // Verificar recursos CDN
+    const cdnResources = [
+        'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs',
+        'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd'
+    ];
+    
+    for (const url of cdnResources) {
+        try {
+            const response = await fetch(url, { method: 'HEAD' });
+            if (response.ok) {
+                addLogMessage(`✅ Recurso CDN accesible: ${url.split('/').pop()}`);
+            } else {
+                addLogMessage(`⚠️ Problema con recurso: ${url.split('/').pop()}`);
+            }
+        } catch (error) {
+            addLogMessage(`❌ No se puede acceder a: ${url.split('/').pop()}`);
+        }
+    }
+    
+    // Verificar scripts cargados
+    const scripts = ['tf', 'cocoSsd', 'BabyAIMonitorV2'];
+    scripts.forEach(script => {
+        if (window[script]) {
+            addLogMessage(`✅ Script cargado: ${script}`);
+        } else {
+            addLogMessage(`⚠️ Script pendiente: ${script}`);
+        }
+    });
+    
+    addLogMessage('📊 Diagnóstico completo. Consulta los resultados anteriores.');
+    return true;
+}
+
+// Función para limpiar estado de IA cuando hay errores persistentes
+function resetAIState() {
+    addLogMessage('🔄 Limpiando estado de IA...');
+    
+    // Detener monitoreo si está activo
+    if (aiMonitorEnabled) {
+        stopAIMonitoring();
+    }
+    
+    // Limpiar variables globales
+    aiMonitorInitialized = false;
+    aiMonitorEnabled = false;
+    
+    // Limpiar instancia de IA
+    if (window.babyAIMonitor) {
+        try {
+            if (typeof window.babyAIMonitor.cleanup === 'function') {
+                window.babyAIMonitor.cleanup();
+            }
+        } catch (e) {
+            console.log('Nota: No se pudo limpiar la instancia anterior');
+        }
+        window.babyAIMonitor = null;
+    }
+    
+    // Actualizar botón
+    const aiToggle = document.getElementById('aiMonitorToggle');
+    if (aiToggle) {
+        aiToggle.textContent = '🤖 Activar IA';
+        aiToggle.className = 'btn-secondary';
+        aiToggle.disabled = false;
+    }
+    
+    addLogMessage('✅ Estado de IA reiniciado. Puedes intentar activarla de nuevo.');
+}
+
 // Configuración WebRTC OPTIMIZADA PARA INTERNET
 const rtcConfiguration = {
     iceServers: [
@@ -1079,42 +1161,77 @@ async function initializeAI() {
     try {
         addLogMessage('🤖 Inicializando sistema de IA para monitoreo...');
         
-        // Esperar un momento para asegurar que los scripts se carguen
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Esperar un poco más para asegurar que todos los scripts se carguen
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
-        // Verificar dependencias paso a paso
+        // Verificación más robusta de dependencias
         addLogMessage('🔍 Verificando dependencias de IA...');
         
+        // Verificar TensorFlow.js con reintentos
+        let tfRetries = 0;
+        while (!window.tf && tfRetries < 3) {
+            addLogMessage(`⏳ Esperando TensorFlow.js... intento ${tfRetries + 1}/3`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            tfRetries++;
+        }
+        
         if (!window.tf) {
-            throw new Error('❌ TensorFlow.js no está cargado. Verifica tu conexión a internet y recarga la página.');
+            throw new Error('❌ TensorFlow.js no está disponible. Verifica tu conexión a internet.');
         }
         addLogMessage('✅ TensorFlow.js disponible');
         
+        // Verificar COCO-SSD con reintentos
+        let cocoRetries = 0;
+        while (!window.cocoSsd && cocoRetries < 3) {
+            addLogMessage(`⏳ Esperando COCO-SSD... intento ${cocoRetries + 1}/3`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            cocoRetries++;
+        }
+        
         if (!window.cocoSsd) {
-            throw new Error('❌ COCO-SSD no está cargado. Verifica tu conexión a internet.');
+            throw new Error('❌ COCO-SSD no está disponible. Verifica tu conexión a internet.');
         }
         addLogMessage('✅ COCO-SSD disponible');
         
+        // MediaPipe es opcional
         if (!window.Pose) {
-            addLogMessage('⚠️ MediaPipe Pose no disponible, usando modo básico');
+            addLogMessage('⚠️ MediaPipe Pose no disponible, usando modo básico (esto es normal)');
         } else {
             addLogMessage('✅ MediaPipe Pose disponible');
         }
         
+        // Verificar clase BabyAIMonitorV2
         if (!window.BabyAIMonitorV2) {
-            throw new Error('❌ Clase BabyAIMonitorV2 no encontrada. Verifica que ai-baby-monitor-v2.js esté cargado correctamente.');
+            addLogMessage('⚠️ Clase BabyAIMonitorV2 no encontrada, reintentando...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            if (!window.BabyAIMonitorV2) {
+                throw new Error('❌ Sistema de IA no está completamente cargado. Recarga la página.');
+            }
         }
         addLogMessage('✅ BabyAIMonitor V2 disponible');
         
-        // Crear instancia si no existe
+        // Crear instancia con manejo de errores
         if (!window.babyAIMonitor) {
             addLogMessage('🏗️ Creando instancia de BabyAIMonitor V2...');
-            window.babyAIMonitor = new window.BabyAIMonitorV2();
-            addLogMessage('✅ Instancia V2 creada exitosamente');
+            try {
+                window.babyAIMonitor = new window.BabyAIMonitorV2();
+                addLogMessage('✅ Instancia V2 creada exitosamente');
+            } catch (instanceError) {
+                console.error('Error creando instancia:', instanceError);
+                throw new Error('❌ Error al crear instancia de IA. Recarga la página.');
+            }
         }
         
-        addLogMessage('⏳ Cargando modelos de IA (esto puede tomar unos segundos)...');
-        const success = await window.babyAIMonitor.initialize();
+        addLogMessage('⏳ Inicializando modelos de IA (esto puede tomar hasta 30 segundos)...');
+        
+        // Inicializar con timeout más largo
+        const initPromise = window.babyAIMonitor.initialize();
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 30000)
+        );
+        
+        const success = await Promise.race([initPromise, timeoutPromise]);
         
         if (success) {
             aiMonitorInitialized = true;
@@ -1134,21 +1251,31 @@ async function initializeAI() {
         
     } catch (error) {
         console.error('Error al inicializar IA:', error);
-        addLogMessage(`❌ ${error.message}`);
         
-        // Mostrar ayuda específica al usuario
-        if (error.message.includes('TensorFlow') || error.message.includes('COCO-SSD') || error.message.includes('PoseDetection')) {
-            addLogMessage('💡 Solución: Verifica tu conexión a internet y recarga la página');
-            addLogMessage('🔧 Si el problema persiste, prueba con otro navegador');
-        } else if (error.message.includes('BabyAIMonitor')) {
-            addLogMessage('💡 Solución: Recarga la página completamente (Ctrl+F5)');
+        let errorMessage = error.message;
+        let solution = '';
+        
+        // Mejorar mensajes de error
+        if (error.message === 'Timeout') {
+            errorMessage = '❌ Tiempo de espera agotado al cargar modelos de IA';
+            solution = '💡 Verifica tu conexión a internet e inténtalo de nuevo';
+        } else if (error.message.includes('TensorFlow') || error.message.includes('COCO-SSD')) {
+            solution = '💡 Problemas de conexión. Verifica internet y recarga la página (F5)';
+        } else if (error.message.includes('BabyAIMonitor') || error.message.includes('instancia')) {
+            solution = '💡 Recarga la página completamente (Ctrl+F5)';
+        } else {
+            solution = '💡 Inténtalo de nuevo o recarga la página si persiste';
         }
         
-        // Actualizar botón de IA
+        addLogMessage(`❌ ${errorMessage}`);
+        if (solution) addLogMessage(solution);
+        
+        // Actualizar botón de IA con opción de reintentar
         const aiToggle = document.getElementById('aiMonitorToggle');
         if (aiToggle) {
-            aiToggle.textContent = '❌ Error IA - Reintentar';
+            aiToggle.textContent = '🔄 Reintentar IA';
             aiToggle.className = 'btn-warning';
+            aiToggle.disabled = false; // Permitir reintentos
         }
         
         return false;
@@ -1318,6 +1445,32 @@ function playAlertSound(severity) {
 function toggleAIMonitoring() {
     const aiToggle = document.getElementById('aiMonitorToggle');
     
+    // Si el botón indica reintentar, permitir nueva inicialización
+    if (aiToggle && (aiToggle.textContent.includes('Reintentar') || aiToggle.textContent.includes('Error'))) {
+        aiToggle.textContent = '⏳ Reintentando IA...';
+        aiToggle.className = 'btn-warning';
+        aiToggle.disabled = true;
+        
+        // Resetear estado para permitir reinicialización
+        aiMonitorInitialized = false;
+        aiMonitorEnabled = false;
+        window.babyAIMonitor = null;
+        
+        // Intentar inicializar de nuevo
+        initializeAI().then(success => {
+            if (aiToggle) {
+                aiToggle.disabled = false;
+            }
+            
+            if (success) {
+                aiToggle.textContent = '▶️ Activar IA';
+                aiToggle.className = 'btn-success';
+            }
+            // Si falla, el botón ya estará configurado para reintentar por initializeAI()
+        });
+        return;
+    }
+    
     if (!aiMonitorInitialized) {
         // Mostrar feedback de que está inicializando
         if (aiToggle) {
@@ -1333,12 +1486,8 @@ function toggleAIMonitoring() {
             
             if (success) {
                 startAIMonitoring();
-            } else {
-                if (aiToggle) {
-                    aiToggle.textContent = '❌ Error IA - Reintentar';
-                    aiToggle.className = 'btn-danger';
-                }
             }
+            // Si falla, el botón ya estará configurado para reintentar por initializeAI()
         });
     } else if (aiMonitorEnabled) {
         stopAIMonitoring();

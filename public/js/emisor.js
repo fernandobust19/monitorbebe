@@ -13,6 +13,8 @@ let connectedReceptores = new Map(); // receptorId -> {username, number}
 // Variables para IA de monitoreo
 let aiMonitorEnabled = false;
 let aiMonitorInitialized = false;
+let aiPreloadCompleted = false;
+let preloadProgress = 0;
 
 // Sistema de reconocimiento inteligente del bebé
 let babyRecognitionSystem = {
@@ -59,6 +61,195 @@ const STATUS_MESSAGES = {
     waiting: 'Esperando receptor...',
     error: 'Error de conexión'
 };
+
+// Sistema de Precarga Automática de IA
+function updatePreloadProgress(percentage, status, stepId) {
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    const statusText = document.getElementById('preloadStatus');
+    
+    if (progressFill) {
+        progressFill.style.width = percentage + '%';
+    }
+    
+    if (progressText) {
+        progressText.textContent = Math.round(percentage) + '%';
+    }
+    
+    if (statusText) {
+        statusText.textContent = status;
+    }
+    
+    // Actualizar estado del paso actual
+    if (stepId) {
+        const steps = document.querySelectorAll('.step');
+        steps.forEach(step => step.classList.remove('loading'));
+        
+        const currentStep = document.getElementById(stepId);
+        if (currentStep) {
+            currentStep.classList.add('loading');
+        }
+    }
+}
+
+function markStepCompleted(stepId, newText) {
+    const step = document.getElementById(stepId);
+    if (step) {
+        step.classList.remove('loading');
+        step.classList.add('completed');
+        if (newText) {
+            step.textContent = newText;
+        }
+    }
+}
+
+function markStepError(stepId, errorText) {
+    const step = document.getElementById(stepId);
+    if (step) {
+        step.classList.remove('loading');
+        step.classList.add('error');
+        if (errorText) {
+            step.textContent = errorText;
+        }
+    }
+}
+
+async function preloadAISystem() {
+    try {
+        updatePreloadProgress(0, 'Iniciando carga de inteligencia artificial...', 'step1');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Paso 1: Verificar y cargar TensorFlow.js
+        updatePreloadProgress(10, 'Cargando TensorFlow.js...', 'step1');
+        let tfRetries = 0;
+        while (!window.tf && tfRetries < 5) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            tfRetries++;
+        }
+        
+        if (!window.tf) {
+            markStepError('step1', 'Error: TensorFlow.js no disponible');
+            throw new Error('TensorFlow.js no está disponible');
+        }
+        
+        markStepCompleted('step1', 'TensorFlow.js cargado correctamente');
+        updatePreloadProgress(25, 'TensorFlow.js listo - Cargando modelos...', 'step2');
+        
+        // Paso 2: Cargar COCO-SSD
+        let cocoRetries = 0;
+        while (!window.cocoSsd && cocoRetries < 5) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            cocoRetries++;
+        }
+        
+        if (!window.cocoSsd) {
+            markStepError('step2', 'Error: COCO-SSD no disponible');
+            throw new Error('COCO-SSD no está disponible');
+        }
+        
+        markStepCompleted('step2', 'COCO-SSD cargado correctamente');
+        updatePreloadProgress(45, 'Configurando MediaPipe...', 'step3');
+        
+        // Paso 3: MediaPipe (opcional)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (window.Pose) {
+            markStepCompleted('step3', 'MediaPipe Pose configurado');
+        } else {
+            markStepCompleted('step3', 'MediaPipe no disponible - usando modo básico');
+        }
+        
+        updatePreloadProgress(65, 'Inicializando sistema inteligente del bebé...', 'step4');
+        
+        // Paso 4: Crear e inicializar BabyAIMonitorV2
+        if (!window.BabyAIMonitorV2) {
+            markStepError('step4', 'Error: Clase BabyAIMonitorV2 no encontrada');
+            throw new Error('BabyAIMonitorV2 no está disponible');
+        }
+        
+        window.babyAIMonitor = new window.BabyAIMonitorV2();
+        const initSuccess = await window.babyAIMonitor.initialize();
+        
+        if (!initSuccess) {
+            markStepError('step4', 'Error: Falló inicialización de IA del bebé');
+            throw new Error('No se pudo inicializar BabyAIMonitorV2');
+        }
+        
+        markStepCompleted('step4', 'IA del bebé inicializada correctamente');
+        updatePreloadProgress(85, 'Preparando sistema de reconocimiento...', 'step5');
+        
+        // Paso 5: Configurar sistema de reconocimiento
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Cargar perfil del bebé si existe
+        const savedProfile = localStorage.getItem('babyProfile');
+        if (savedProfile && window.babyAIMonitor) {
+            try {
+                const profile = JSON.parse(savedProfile);
+                window.babyAIMonitor.setBabyProfile(profile);
+                markStepCompleted('step5', 'Perfil del bebé cargado desde memoria');
+            } catch (e) {
+                markStepCompleted('step5', 'Sistema de reconocimiento listo');
+            }
+        } else {
+            markStepCompleted('step5', 'Sistema de reconocimiento listo');
+        }
+        
+        updatePreloadProgress(100, '¡Inteligencia artificial lista! Iniciando aplicación...', null);
+        
+        // Marcar como inicializado
+        aiMonitorInitialized = true;
+        aiPreloadCompleted = true;
+        
+        // Ocultar preloader después de un breve delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        const preloader = document.getElementById('aiPreloader');
+        if (preloader) {
+            preloader.style.opacity = '0';
+            setTimeout(() => {
+                preloader.style.display = 'none';
+            }, 500);
+        }
+        
+        // Actualizar botón de IA
+        const aiToggle = document.getElementById('aiMonitorToggle');
+        if (aiToggle) {
+            aiToggle.textContent = '✅ IA Lista - Clic para Activar';
+            aiToggle.className = 'btn-success';
+            aiToggle.disabled = false;
+        }
+        
+        console.log('🎉 Sistema de IA precargado completamente');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error en precarga de IA:', error);
+        updatePreloadProgress(0, 'Error cargando IA: ' + error.message, null);
+        
+        // Mostrar opciones de recuperación
+        setTimeout(() => {
+            const preloader = document.getElementById('aiPreloader');
+            if (preloader) {
+                const content = preloader.querySelector('.preloader-content');
+                content.innerHTML = `
+                    <h2>❌ Error de Carga</h2>
+                    <p>No se pudo cargar completamente el sistema de IA</p>
+                    <p><strong>Posibles soluciones:</strong></p>
+                    <ul style="text-align: left; margin: 20px 0;">
+                        <li>Verificar conexión a internet</li>
+                        <li>Recargar la página (F5)</li>
+                        <li>Usar otro navegador</li>
+                        <li>Limpiar caché del navegador</li>
+                    </ul>
+                    <button onclick="location.reload()" style="padding: 12px 24px; border: none; border-radius: 8px; background: #4CAF50; color: white; font-size: 16px; cursor: pointer; margin: 10px;">🔄 Recargar Página</button>
+                    <button onclick="document.getElementById('aiPreloader').style.display='none'" style="padding: 12px 24px; border: none; border-radius: 8px; background: #ff6b6b; color: white; font-size: 16px; cursor: pointer; margin: 10px;">⚠️ Continuar sin IA</button>
+                `;
+            }
+        }, 2000);
+        
+        return false;
+    }
+}
 
 // Función de diagnóstico para problemas de conexión/IA
 async function runDiagnostics() {
@@ -180,7 +371,17 @@ const rtcConfiguration = {
 
 // Inicialización cuando la página carga
 window.addEventListener('load', async () => {
-    await initializeApp();
+    console.log('🚀 Inicializando aplicación Monitor Bebé - Emisor');
+    
+    // Iniciar precarga de IA inmediatamente
+    preloadAISystem().then(success => {
+        if (success) {
+            console.log('✅ Precarga de IA completada, iniciando aplicación');
+        } else {
+            console.warn('⚠️ Aplicación iniciada sin IA completa');
+        }
+        initializeApp();
+    });
 });
 
 async function initializeApp() {
@@ -209,19 +410,16 @@ async function initializeApp() {
     // Mostrar información de la sala
     updateRoomInfo();
     
-    // Inicializar IA automáticamente al cargar la aplicación
-    setTimeout(async () => {
-        addLogMessage('🤖 Inicializando sistema de IA automáticamente...');
-        const aiInitialized = await initializeAI();
-        if (aiInitialized) {
-            addLogMessage('✅ IA lista para monitoreo automático del bebé');
-            
-            // Cargar perfil del bebé guardado
-            loadSavedBabyProfile();
-        } else {
-            addLogMessage('⚠️ Error al inicializar IA - se reintentará al iniciar cámara');
-        }
-    }, 1000);
+    // Si la IA se precargó exitosamente, mostrar mensaje
+    if (aiPreloadCompleted && aiMonitorInitialized) {
+        addLogMessage('🎉 ¡Sistema de IA precargado y listo para usar!');
+        addLogMessage('💡 Activa la cámara y luego haz clic en "IA Lista" para comenzar el monitoreo');
+        
+        // Cargar perfil del bebé guardado
+        loadSavedBabyProfile();
+    } else {
+        addLogMessage('⚠️ Sistema iniciado sin precarga completa de IA');
+    }
     
     addLogMessage('Aplicación inicializada correctamente');
 }
@@ -236,6 +434,14 @@ function initializeDOMElements() {
     const startStreamBtn = document.getElementById('startStreamBtn');
     const stopStreamBtn = document.getElementById('stopStreamBtn');
     const backBtn = document.getElementById('backBtn');
+    const aiToggle = document.getElementById('aiMonitorToggle');
+    
+    // Deshabilitar botón de IA hasta que se complete la precarga
+    if (aiToggle && !aiPreloadCompleted) {
+        aiToggle.textContent = '⏳ Cargando IA...';
+        aiToggle.className = 'btn-warning';
+        aiToggle.disabled = true;
+    }
     
     // Eventos de botones
     startBtn.addEventListener('click', startCamera);
@@ -1445,54 +1651,39 @@ function playAlertSound(severity) {
 function toggleAIMonitoring() {
     const aiToggle = document.getElementById('aiMonitorToggle');
     
-    // Si el botón indica reintentar, permitir nueva inicialización
-    if (aiToggle && (aiToggle.textContent.includes('Reintentar') || aiToggle.textContent.includes('Error'))) {
-        aiToggle.textContent = '⏳ Reintentando IA...';
-        aiToggle.className = 'btn-warning';
-        aiToggle.disabled = true;
-        
-        // Resetear estado para permitir reinicialización
-        aiMonitorInitialized = false;
-        aiMonitorEnabled = false;
-        window.babyAIMonitor = null;
-        
-        // Intentar inicializar de nuevo
-        initializeAI().then(success => {
-            if (aiToggle) {
-                aiToggle.disabled = false;
-            }
-            
-            if (success) {
-                aiToggle.textContent = '▶️ Activar IA';
-                aiToggle.className = 'btn-success';
-            }
-            // Si falla, el botón ya estará configurado para reintentar por initializeAI()
-        });
+    // Si no hay precarga completa, mostrar mensaje
+    if (!aiPreloadCompleted || !aiMonitorInitialized) {
+        if (aiToggle) {
+            aiToggle.textContent = '⚠️ IA no disponible';
+            aiToggle.className = 'btn-warning';
+        }
+        addLogMessage('❌ La IA no está completamente cargada. Recarga la página.');
         return;
     }
     
-    if (!aiMonitorInitialized) {
-        // Mostrar feedback de que está inicializando
-        if (aiToggle) {
-            aiToggle.textContent = '⏳ Inicializando IA...';
-            aiToggle.className = 'btn-warning';
-            aiToggle.disabled = true;
+    // Alternar estado del monitoreo
+    if (aiMonitorEnabled) {
+        stopAIMonitoring();
+        aiToggle.textContent = '▶️ Activar IA';
+        aiToggle.className = 'btn-success';
+        addLogMessage('🛑 Monitoreo de IA desactivado');
+    } else {
+        if (!localVideo) {
+            addLogMessage('❌ Debes activar la cámara primero');
+            return;
         }
         
-        initializeAI().then(success => {
-            if (aiToggle) {
-                aiToggle.disabled = false;
-            }
-            
-            if (success) {
-                startAIMonitoring();
-            }
-            // Si falla, el botón ya estará configurado para reintentar por initializeAI()
-        });
-    } else if (aiMonitorEnabled) {
-        stopAIMonitoring();
-    } else {
         startAIMonitoring();
+        aiToggle.textContent = '🔴 IA Activa';
+        aiToggle.className = 'btn-danger';
+        addLogMessage('🤖 ¡Monitoreo de IA activado! Vigilando al bebé...');
+        
+        // Mostrar panel de reconocimiento si no hay perfil configurado
+        const savedProfile = localStorage.getItem('babyProfile');
+        if (!savedProfile) {
+            document.getElementById('baby-recognition-panel').style.display = 'block';
+            addLogMessage('💡 Consejo: Usa "Reconocer Bebé" para personalizar la detección');
+        }
     }
 }
 

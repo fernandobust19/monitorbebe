@@ -138,6 +138,29 @@ function initializeDOMElements() {
     const backBtn = document.getElementById('backBtn');
     const muteBtn = document.getElementById('muteBtn');
     const volumeSlider = document.getElementById('volumeSlider');
+
+    // Manejar permisos de inicio
+    const permissionBtn = document.getElementById('activatePermissionsBtn');
+    if (permissionBtn) {
+        permissionBtn.addEventListener('click', async () => {
+             document.getElementById('permissionOverlay').style.display = 'none';
+             // Desbloquear audio/video intentando reproducir
+             if (remoteVideo) {
+                 remoteVideo.muted = false; // Intentar activar sonido
+                 try {
+                     await remoteVideo.play();
+                 } catch(e) { /* Es normal si no hay stream aun */ }
+             }
+             if (window.alarmSounds) {
+                // Initialize/Resume audio context
+                 if (window.alarmSounds.audioContext && window.alarmSounds.audioContext.state === 'suspended') {
+                     window.alarmSounds.audioContext.resume();
+                 }
+                 window.alarmSounds.playTestSound(); // Sonido corto para desbloquear
+             }
+             addLogMessage('✅ Permisos de usuario activados por toque');
+        });
+    }
     
     // --- EVENTOS DE BOTONES (SIMPLIFICADO) ---
     if (playVideoBtn) playVideoBtn.addEventListener('click', forcePlayVideo);

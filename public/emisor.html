@@ -7,6 +7,15 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <!-- Overlay de Permisos (Importante para iOS) -->
+    <div id="permissionOverlay" class="permission-overlay">
+        <div class="permission-content">
+            <h2>🔑 Permisos Requeridos</h2>
+            <p>Para transmitir desde este dispositivo (especialmente iPhone/iPad), necesitamos acceso a la cámara y micrófono.</p>
+            <button id="activatePermissionsBtn" class="btn-large-pulse">👆 Toca aquí para Activar</button>
+        </div>
+    </div>
+
     <!-- Overlay de Precarga de IA -->
     <div id="aiPreloader" class="ai-preloader">
         <div class="preloader-content">

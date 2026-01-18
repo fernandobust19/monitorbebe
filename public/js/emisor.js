@@ -436,6 +436,21 @@ function initializeDOMElements() {
     const backBtn = document.getElementById('backBtn');
     const aiToggle = document.getElementById('aiMonitorToggle');
     
+    // Manejar permisos de inicio
+    const permissionBtn = document.getElementById('activatePermissionsBtn');
+    if (permissionBtn) {
+        permissionBtn.addEventListener('click', async () => {
+             document.getElementById('permissionOverlay').style.display = 'none';
+             // Intentar iniciar la cámara inmediatamente aprovechando el click
+             addLogMessage('✅ Permisos activados. Iniciando cámara...');
+             try {
+                 await startCamera();
+             } catch (e) {
+                 console.error("Error auto-iniciando cámara", e);
+             }
+        });
+    }
+
     // Deshabilitar botón de IA hasta que se complete la precarga
     if (aiToggle && !aiPreloadCompleted) {
         aiToggle.textContent = '⏳ Cargando IA...';
@@ -884,14 +899,18 @@ async function startStreaming() {
         addLogMessage(`✨ Transmisión iniciada para ${connectionCount} receptores`);
         updateStreamingStatus(`Transmitiendo a ${connectionCount} receptores`);
         
-        // Asegurar que la IA esté activa al iniciar streaming
+        // Asegurar que la IA esté lista pero NO activarla automáticamente
         if (localVideo && localVideo.videoWidth > 0) {
             setTimeout(async () => {
                 if (!aiMonitorInitialized) {
-                    addLogMessage('🤖 Inicializando IA para transmisión...');
-                    await initializeAI();
+                    addLogMessage('🤖 Inicializando motor de IA (en espera)...');
+                    // Solo inicializar, no activar
+                    await initializeAI(); 
+                    addLogMessage('✅ IA Inicializada y lista para activar manualmente');
                 }
                 
+                // Eliminado el auto-arranque del monitoreo
+                /* 
                 if (aiMonitorInitialized && !aiMonitorEnabled) {
                     addLogMessage('👶 Activando monitoreo continuo del bebé para transmisión...');
                     const monitoringStarted = startAIMonitoring();
@@ -899,7 +918,8 @@ async function startStreaming() {
                         addLogMessage('✅ Monitoreo continuo ACTIVADO durante transmisión');
                     }
                 }
-            }, 1000); // Menos tiempo de espera para activación inmediata
+                */
+            }, 1000); 
         }
         
     } catch (error) {

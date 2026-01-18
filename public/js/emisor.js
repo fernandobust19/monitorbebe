@@ -496,6 +496,10 @@ function initializeSocket() {
             setTimeout(() => {
                 recreatePeerConnection(data.receptorId);
             }, 1000);
+        } else if (localStream && !isStreaming) {
+            // Si la cámara está lista pero no transmitiendo, iniciar automáticamente
+            addLogMessage(`⚡ Receptor conectado y cámara lista. Iniciando transmisión automática...`);
+            setTimeout(() => startStreaming(), 500);
         }
         
         updateReceptorStatus(`${data.totalReceptores} receptor(es) conectado(s)`);
@@ -694,9 +698,13 @@ async function startCamera() {
         addLogMessage('✅ Cámara iniciada correctamente');
         
         // Si hay receptor conectado, habilitar transmisión
-        if (document.getElementById('receptorStatus').textContent.includes('Conectado')) {
+        if (connectedReceptores.size > 0 || document.getElementById('receptorStatus').textContent.includes('Conectado')) {
             document.getElementById('startStreamBtn').disabled = false;
             addLogMessage('🎆 Listo para transmitir - hay receptor conectado');
+            
+            // Inicio automático de transmisión
+            addLogMessage('⚡ Iniciando transmisión automática...');
+            setTimeout(() => startStreaming(), 500);
         }
         
         // Inicializar y activar IA automáticamente cuando la cámara está lista
